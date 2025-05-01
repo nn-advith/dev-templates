@@ -12,15 +12,21 @@ type User struct {
 	Name string `json:"name"`
 }
 
-var userCache = make(map[int]User)
+var userCache = make(map[int]User) // simulating a database using a map
 var cacheMutex sync.RWMutex
 
 func rootHandler(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	fmt.Println(userCache)
-	fmt.Fprintf(w, "Hello World")
+	if req.URL.Path == "/" {
+		// default / path handler
+		fmt.Println(userCache)
+		w.Write([]byte("Hello world. Wassup"))
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("No. Not allowed."))
+	}
 
 }
 
@@ -75,7 +81,7 @@ func createUser(
 	req *http.Request,
 ) {
 	var user User
-	err := json.NewDecoder(req.Body).Decode(&user)
+	err := json.NewDecoder(req.Body).Decode(&user) // decode from request body and into user struct
 	if err != nil {
 		http.Error(w, "Error here", http.StatusBadRequest)
 		return
@@ -87,7 +93,7 @@ func createUser(
 	}
 
 	cacheMutex.Lock()
-	userCache[len(userCache)+1] = user
+	userCache[len(userCache)+1] = user // write operation into db; so lock it
 	cacheMutex.Unlock()
 
 	w.WriteHeader(http.StatusNoContent)
@@ -97,13 +103,13 @@ func deleteUserFromId(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	id, err := strconv.Atoi(req.PathValue("id"))
+	id, err := strconv.Atoi(req.PathValue("id")) // get query param id
 	if err != nil {
 		http.Error(w, "Error reading ID from path", http.StatusBadRequest)
 		return
 	}
 
-	if _, ok := userCache[id]; !ok {
+	if _, ok := userCache[id]; !ok { //check existance in map
 		http.Error(w, "User Not found", http.StatusNotFound)
 		return
 	}
@@ -116,11 +122,16 @@ func deleteUserFromId(
 
 }
 
+func unknownPath(w http.ResponseWriter, req *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte("This path is not defined"))
+}
+
 func hbrouting(
 	w http.ResponseWriter,
 	req *http.Request,
 ) {
-	fmt.Fprintf(w, "Hit host based routing handler")
+	fmt.Fprintf(w, "Hit host based routing handlesr")
 }
 
 func hbroutingindex(
@@ -132,15 +143,13 @@ func hbroutingindex(
 
 func main() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", rootHandler)
 	mux.HandleFunc("POST /users", createUser)
 	mux.HandleFunc("GET /users", getAllUsers)
 	mux.HandleFunc("GET /users/{id}", getUserFromId)
 	mux.HandleFunc("DELETE /users/{id}", deleteUserFromId)
-
 	mux.HandleFunc("samplehost.dev/", hbrouting)
 	mux.HandleFunc("samplehost.dev/index", hbroutingindex)
-
+	mux.HandleFunc("/", rootHandler)
 	fmt.Println("Server is listening on :3000")
 	err := http.ListenAndServe(":3000", mux)
 	if err != nil {
